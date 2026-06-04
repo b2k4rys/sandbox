@@ -6,4 +6,4 @@ def fibonacci_iterative(n):
     return a
 
 # Example usage: Find the 7th Fibonacci number
-print(fibonacci_iterative(7))  # Output: 13
+print(fibonacci_iterative(10))  # Output: 13
