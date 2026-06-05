@@ -15,7 +15,7 @@ async def execute_docker(file: UploadFile = File()):
         file.write(f"\n{text}")
 
     subprocess.run([
-        'docker', 'run', '--name', 'output',
+        'docker', 'run', '--name', 'output', '--network', 'none',
         '-v', f'{os.getcwd()}/sample_{random_id}.py:/app/sample.py',
         'test'
     ])

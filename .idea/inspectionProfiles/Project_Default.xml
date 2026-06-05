@@ -1,0 +1,26 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <list>
+          <option value="filetype" />
+          <option value="Django" />
+          <option value="djangorestframework" />
+          <option value="psycopg2-binary" />
+          <option value="django-cors-headers" />
+          <option value="minio" />
+          <option value="django-environ" />
+          <option value="gunicorn" />
+          <option value="pillow" />
+          <option value="django-filter" />
+          <option value="openpyxl" />
+          <option value="asn1crypto" />
+          <option value="cryptography" />
+          <option value="pykalkan" />
+          <option value="python-magic-bin" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
