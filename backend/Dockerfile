@@ -4,4 +4,4 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python","sample.py"]
+CMD ["python", "sample.py"]

@@ -2,6 +2,10 @@ from fastapi import APIRouter, UploadFile, File
 import subprocess
 from asyncio import sleep
 import uuid
+import asyncio
+
+from sentry_sdk import capture_message
+
 sandbox_router = APIRouter(prefix='/sandbox')
 import os
 
@@ -14,21 +18,24 @@ async def execute_docker(file: UploadFile = File()):
     with open(f'sample_{random_id}.py', 'w') as file:
         file.write(f"\n{text}")
     try:
-
-        subprocess.run([
-            'docker', 'run', '--name', 'output', '--network', 'none',
-            '--memory', '128m', '--cpus', '0.5',
+        process = await asyncio.create_subprocess_exec(
+            'docker', 'run', '--name', f'output_{random_id}', '--network', 'none',
+            '--memory', '128m', '--cpus', '0.5', '--pids-limit', '64',
             '-v', f'{os.getcwd()}/sample_{random_id}.py:/app/sample.py',
             'test'
-        ], timeout=10)
-    except subprocess.TimeoutExpired:
-        subprocess.run(['docker', 'rm', '-f', 'output'])
-        os.remove(f'{os.getcwd()}/sample_{random_id}.py')
+        )
+        await asyncio.wait_for(process.wait(), timeout=10)
+        logs = await asyncio.create_subprocess_exec(
+            'docker', 'logs', f'output_{random_id}',
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await logs.communicate()
+        if stderr:
+            return stderr
+        return stdout
+    except asyncio.TimeoutError:
         return "Time Limit exceeded"
-
-    logs = subprocess.run(['docker', 'logs', 'output'], capture_output=True, text=True)
-    subprocess.run(['docker', 'rm', '-f', 'output'])
-    os.remove(f'{os.getcwd()}/sample_{random_id}.py')
-    print('here is logs', logs)
-    return logs.stdout
+    finally:
+        await asyncio.create_subprocess_exec('docker', 'rm', '-f', f'output_{random_id}')
+        os.remove(f'{os.getcwd()}/sample_{random_id}.py')
 
