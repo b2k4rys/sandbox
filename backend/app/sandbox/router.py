@@ -1,13 +1,9 @@
 from fastapi import APIRouter, UploadFile, File
-import subprocess
-from asyncio import sleep
+
 import uuid
 import asyncio
-
-from sentry_sdk import capture_message
-
-sandbox_router = APIRouter(prefix='/sandbox')
 import os
+sandbox_router = APIRouter(prefix='/sandbox')
 
 @sandbox_router.post('/execute')
 async def execute_docker(file: UploadFile = File()):
