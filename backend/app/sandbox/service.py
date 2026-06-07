@@ -2,6 +2,7 @@ import asyncio
 import os
 from fastapi import UploadFile
 import uuid
+from .schemas import CodeResponse
 
 async def execute_code(file: UploadFile):
     random_id = uuid.uuid4()
@@ -23,11 +24,10 @@ async def execute_code(file: UploadFile):
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await logs.communicate()
-        if stderr:
-            return stderr
-        return stdout
+        schema = CodeResponse(stdout=stdout.decode(), stderr=stderr.decode())
+        return schema
     except asyncio.TimeoutError:
-        return "Time Limit exceeded"
+        return CodeResponse(stderr="Time Limit exceeded")
     finally:
         deletion_process = await asyncio.create_subprocess_exec('docker', 'rm', '-f', f'output_{random_id}')
         try:
