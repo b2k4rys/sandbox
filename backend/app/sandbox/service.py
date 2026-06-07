@@ -1,8 +1,10 @@
 import asyncio
 import os
-from fastapi import UploadFile, File
+from fastapi import UploadFile
+import uuid
 
-async def execute_code(random_id, file: UploadFile = File()):
+async def execute_code(file: UploadFile):
+    random_id = uuid.uuid4()
     contents = await file.read()
     text = contents.decode("utf-8")
 
@@ -27,7 +29,9 @@ async def execute_code(random_id, file: UploadFile = File()):
     except asyncio.TimeoutError:
         return "Time Limit exceeded"
     finally:
-        await asyncio.create_subprocess_exec('docker', 'rm', '-f', f'output_{random_id}')
+        deletion_process = await asyncio.create_subprocess_exec('docker', 'rm', '-f', f'output_{random_id}')
+        try:
+            await asyncio.wait_for(deletion_process.wait(), timeout=5)
+        except asyncio.TimeoutError:
+            pass
         os.remove(f'{os.getcwd()}/sample_{random_id}.py')
-
-
