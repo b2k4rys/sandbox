@@ -3,12 +3,15 @@ from datetime import datetime, timedelta, UTC
 from pwdlib import PasswordHash
 import settings
 from .models import User
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
+from typing import Annotated
 from database import get_db
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.security import OAuth2PasswordBearer
 
 password_hash = PasswordHash.recommended()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 def hash_password(password: str) -> str:
     return password_hash.hash(password)
@@ -26,8 +29,10 @@ def decode_jwt(token: str):
     return jwt.decode(token, key=str(settings.SECRET_KEY), algorithms=['HS256'])
 
 
-async def get_current_user(token: str, db: AsyncSession = Depends(get_db)):
-    user_id = decode_jwt(token)
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: AsyncSession = Depends(get_db)):
+    decoded_jwt = decode_jwt(token)
+    print(decoded_jwt)
+    user_id = int(decoded_jwt['sub'])
     if user_id:
         result = await db.execute(select(User).filter_by(id=user_id))
         user = result.scalars().first()
