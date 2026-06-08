@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, UTC
 from pwdlib import PasswordHash
 import settings
 from .models import User
-from fastapi import APIRouter, Depends, Header
+from fastapi import Depends, HTTPException, status
 from typing import Annotated
 from database import get_db
 from sqlalchemy.future import select
@@ -25,16 +25,14 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(payload, str(settings.SECRET_KEY), algorithm='HS256')
 
 def decode_jwt(token: str):
-    print(repr(token))
     return jwt.decode(token, key=str(settings.SECRET_KEY), algorithms=['HS256'])
 
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: AsyncSession = Depends(get_db)):
     decoded_jwt = decode_jwt(token)
-    print(decoded_jwt)
     user_id = int(decoded_jwt['sub'])
     if user_id:
         result = await db.execute(select(User).filter_by(id=user_id))
         user = result.scalars().first()
         return user
-    return "not valid"
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
