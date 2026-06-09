@@ -1,37 +1,22 @@
-import asyncio
 import os
-from fastapi import UploadFile
-import uuid
+import subprocess
 from .schemas import CodeResponse
+from app.sandbox.worker import celery
 
-async def execute_code(file: UploadFile):
-    random_id = uuid.uuid4()
-    contents = await file.read()
-    text = contents.decode("utf-8")
-
-    with open(f'sample_{random_id}.py', 'w') as file:
-        file.write(f"\n{text}")
+@celery.task(name="execute_code")
+def execute_code(random_id):
     try:
-        process = await asyncio.create_subprocess_exec(
+        process = subprocess.run([
             'docker', 'run', '--name', f'output_{random_id}', '--network', 'none',
-            '--memory', '128m', '--cpus', '0.5', '--pids-limit', '64',
+            '--memory', '128m', '--cpus', '0.5',
             '-v', f'{os.getcwd()}/sample_{random_id}.py:/app/sample.py',
             'test'
-        )
-        await asyncio.wait_for(process.wait(), timeout=10)
-        logs = await asyncio.create_subprocess_exec(
-            'docker', 'logs', f'output_{random_id}',
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await logs.communicate()
-        schema = CodeResponse(stdout=stdout.decode(), stderr=stderr.decode())
-        return schema
-    except asyncio.TimeoutError:
-        return CodeResponse(stderr="Time Limit exceeded")
+        ], timeout=10)
+        logs = subprocess.run(['docker', 'logs', f'output_{random_id}'], capture_output=True, text=True)
+        schema = CodeResponse(stdout=logs.stdout, stderr=logs.stderr)
+        return schema.model_dump()
+    except subprocess.TimeoutExpired:
+        return CodeResponse(stderr="time limit exceed").model_dump()
     finally:
-        deletion_process = await asyncio.create_subprocess_exec('docker', 'rm', '-f', f'output_{random_id}')
-        try:
-            await asyncio.wait_for(deletion_process.wait(), timeout=5)
-        except asyncio.TimeoutError:
-            pass
+        subprocess.run(['docker', 'rm', '-f', f'output_{random_id}'])
         os.remove(f'{os.getcwd()}/sample_{random_id}.py')
