@@ -1,2 +1,8 @@
 .env
 CLAUDE.md
+__pycache__/
+*.pyc
+dump.rdb
+sample_*.py
+.venv/
+.env
