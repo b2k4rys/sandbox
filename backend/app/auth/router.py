@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from database import get_db
+from backend.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from .models import User
 from sqlalchemy.future import select

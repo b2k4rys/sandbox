@@ -1,11 +1,11 @@
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, UTC
 from pwdlib import PasswordHash
-import settings
+from backend import settings
 from .models import User
 from fastapi import Depends, HTTPException, status
 from typing import Annotated
-from database import get_db
+from backend.database import get_db
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import OAuth2PasswordBearer
