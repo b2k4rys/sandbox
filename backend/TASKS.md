@@ -19,7 +19,7 @@ runs. The web process enqueues a job and returns immediately; a separate **worke
 process does the slow work. This is the single most important pattern for scaling
 web backends. Right now it works but it's rough — clean it up and understand every line.
 
-- [ ] **1.1 — Kill the dead code & fix config in `worker.py`**
+- [x] **1.1 — Kill the dead code & fix config in `worker.py`**
   - *Concept:* configuration hygiene, single source of truth.
   - *Why:* `r = redis.Redis(...)` (line 4) is never used, and you have two
     conflicting URLs (`redis_url` unused, `broker_url`/`result_backend` from env
