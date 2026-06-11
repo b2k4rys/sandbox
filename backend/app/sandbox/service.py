@@ -3,7 +3,7 @@ import subprocess
 from app.sandbox.schemas import CodeResponse
 from app.sandbox.worker import celery
 
-@celery.task(name="execute_code")
+@celery.task(name="execute_code", track_started=True)
 def execute_code(random_id):
     try:
         process = subprocess.run([

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, field_validator
 from pydantic_core.core_schema import ValidationInfo
 
 

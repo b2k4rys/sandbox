@@ -37,7 +37,7 @@ web backends. Right now it works but it's rough — clean it up and understand e
   - *Acceptance:* `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` are fields on your
     settings object with sane local defaults; `worker.py` imports them.
 
-- [ ] **1.3 — Define proper response schemas for the two endpoints**
+- [x] **1.3 — Define proper response schemas for the two endpoints**
   - *Concept:* API contracts via Pydantic; never return bare strings/dicts.
   - *Why:* `/execute` returns a raw `task.id` string and `/execute/{id}` returns a
     hand-built dict. A typed response model gives you docs, validation, and a stable
@@ -45,7 +45,7 @@ web backends. Right now it works but it's rough — clean it up and understand e
   - *Acceptance:* `POST /execute` returns `{ "task_id": ... }` typed; the GET returns
     a typed model with `task_id`, `status`, `result`. Visible & correct in `/docs`.
 
-- [ ] **1.4 — Understand the task lifecycle (write it down, no code)**
+- [x] **1.4 — Understand the task lifecycle (write it down, no code)**
   - *Concept:* states of a distributed job: `PENDING → STARTED → SUCCESS/FAILURE`.
   - *Why:* Your GET handler branches on `status == "SUCCESS"`. Do you know what
     `PENDING` actually means in Celery? (Trap: PENDING also means "task id unknown" —
