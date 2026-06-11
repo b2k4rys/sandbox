@@ -1,13 +1,11 @@
-from pydantic import BaseModel, Field, EmailStr
 from database import Base
-from sqlalchemy import Column, Integer, String
-
+from sqlalchemy.orm import Mapped, mapped_column
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(Integer, index=True, primary_key=True)
-    username = Column(String, unique=True, index=True)
-    email = Column(String, unique=True, index=True)
-    password = Column(String)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username : Mapped[str] = mapped_column(unique=True, index=True)
+    email : Mapped[str] = mapped_column(unique=True, index=True)
+    password : Mapped[str] =  mapped_column()
 
 

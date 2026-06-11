@@ -1,0 +1,24 @@
+from database import Base
+from sqlalchemy import ForeignKey
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy.orm import Mapped, mapped_column
+import enum
+from datetime import datetime
+from sqlalchemy import func
+
+class CeleryStatuses(enum.Enum):
+    PENDING = "pending"
+    STARTED = "started"
+    FAILED = "failed"
+    SUCCESS = "success"
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+    task_id : Mapped[str] = mapped_column(primary_key=True)
+    status :  Mapped[CeleryStatuses] = mapped_column(SAEnum(CeleryStatuses))
+    user_id : Mapped[int] = mapped_column(ForeignKey('users.id'))
+    stdout :  Mapped[str] = mapped_column(nullable=True)
+    stderr :  Mapped[str] = mapped_column(nullable=True)
+    created_at : Mapped[datetime] = mapped_column(server_default=func.now())
+    finished_at : Mapped[datetime] = mapped_column(nullable=True)
