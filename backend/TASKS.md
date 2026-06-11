@@ -12,6 +12,27 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ---
 
+## 🎯 North Star — a mini Function-as-a-Service platform
+
+The end goal: turn this from "run a script once" into a **serverless function platform**
+("mini-Lambda"). Users deploy a function; you invoke it repeatedly, *fast*, under load,
+across multiple executor nodes, with metered usage.
+
+The defining engineering problem is the **warm container pool** (Milestone 7) —
+eliminating cold starts by reusing pre-warmed containers. That single problem is deeper
+than everything in Milestones 1–6 combined, and it's exactly what infra interviewers
+probe. Everything before it is foundation that feeds this:
+
+- M2 (persistence) → the source of truth for functions & invocations
+- M3 (security) → matters 10× more once containers are reused across users
+- M4 (observability) → you cannot tune a pool you can't measure
+- M5 (WebSockets/pub-sub) → becomes live invocation log streaming
+
+Don't skip ahead to M7 — build the foundation, *measure the naive cold-start cost first*,
+then make it fast. "Measure, then optimize" is the whole lesson.
+
+---
+
 ## Milestone 1 — Finish the async job pipeline (Celery + Redis)
 
 You just introduced a **task queue**: the HTTP request no longer blocks while Docker
@@ -145,28 +166,160 @@ to the bar a Big-Tech reviewer would expect.
 
 ---
 
-## Milestone 5 — Auth cleanup (flagged in CLAUDE.md)
+## Milestone 5 — Real-time job updates via WebSockets
 
-- [ ] **5.1 — Login returns proper status codes + a typed token response**
+Right now a client has to **poll** `GET /execute/{task_id}` repeatedly to find out
+when a job finishes. That's wasteful and adds latency. The better model is **push**:
+the server notifies the client the moment the job state changes. This is one of the
+most common system design questions at Big Tech — "how would you make this real-time?"
+
+- [ ] **5.1 — Understand push vs pull (write it down, no code)**
+  - *Concept:* polling vs WebSockets vs SSE vs long-polling — four different answers
+    to the same problem. Know the trade-offs.
+  - *Why:* polling is simple but wastes connections and adds latency equal to your
+    poll interval. WebSockets are a persistent bidirectional TCP connection — the
+    server can push at any time. SSE (Server-Sent Events) is a simpler one-way push
+    over HTTP. Long-polling is a hack that bridges the two worlds.
+  - *Acceptance:* a note in this file (below) comparing all four approaches and
+    stating which you'd use for job status updates and why.
+
+- [ ] **5.2 — Add a WebSocket endpoint for job status**
+  - *Concept:* WebSocket lifecycle in FastAPI (`websocket.accept()`, `send_json()`,
+    `close()`), connection management.
+  - *Why:* `websocket.py` is already in your requirements. FastAPI has first-class
+    WebSocket support. The endpoint opens a connection, and when the job transitions
+    to `SUCCESS` or `FAILURE`, it pushes the final result and closes.
+  - *Acceptance:* `WS /sandbox/execute/{task_id}/ws` — client connects, server
+    polls Celery state internally (every ~0.5s), pushes status updates as JSON, closes
+    when terminal state is reached. Test it via `wscat` or a simple Python client.
+
+- [ ] **5.3 — Use Redis pub/sub to replace internal polling**
+  - *Concept:* Redis pub/sub, event-driven architecture, decoupling producer from consumer.
+  - *Why:* the WebSocket endpoint in 5.2 polls Celery state in a loop — that's still
+    polling, just moved server-side. The real solution: the worker **publishes** a
+    message to a Redis channel when the job finishes, and the WebSocket handler
+    **subscribes** to that channel and pushes it to the client immediately. Zero
+    polling, sub-millisecond latency, and scales to multiple web server instances.
+  - *Acceptance:* worker publishes `{"task_id": ..., "status": ..., "result": ...}`
+    to a Redis channel on completion; WebSocket handler subscribes and forwards to
+    the client. No polling loop anywhere.
+
+- [ ] **5.4 — Handle connection edge cases**
+  - *Concept:* distributed systems failure modes — what happens when the client
+    disconnects before the job finishes? What if the job finishes before the client
+    connects?
+  - *Why:* real systems need to handle these. If the client connects *after* the job
+    already finished, the pub/sub message is gone — you need to check Redis/DB first
+    and send the cached result immediately. If the client disconnects mid-run, you
+    need to catch `WebSocketDisconnect` and clean up the subscription.
+  - *Acceptance:* both edge cases handled; explain in a note what each failure mode
+    is and how you handled it.
+
+---
+
+## Milestone 6 — Auth cleanup (flagged in CLAUDE.md)
+
+- [ ] **6.1 — Login returns proper status codes + a typed token response**
   - *Concept:* HTTP semantics, REST correctness.
   - *Why:* returning `False`/a raw token instead of `401` + `{access_token, token_type}`
     is wrong and breaks every standard client. Fix the contract.
-- [ ] **5.2 — Register/login take a request body, not query-string params**
+- [ ] **6.2 — Register/login take a request body, not query-string params**
   - *Concept:* request modeling; credentials never belong in a URL (they get logged).
-- [ ] **5.3 — Review the `get_current_user` dependency**
+- [ ] **6.3 — Review the `get_current_user` dependency**
   - *Concept:* auth middleware / dependency injection; what happens on a bad/expired token.
 
 ---
 
-## Milestone 6 — Testing & CI
+## Milestone 7 — Testing & CI
 
-- [ ] **6.1 — First pytest tests** (none exist yet)
+- [ ] **7.1 — First pytest tests** (none exist yet)
   - *Concept:* the testing pyramid; testing async FastAPI handlers.
   - *Why:* you can't refactor safely without tests. Start with auth (pure-ish) and the
     job-status endpoint (mock Celery).
-- [ ] **6.2 — GitHub Actions CI**
+- [ ] **7.2 — GitHub Actions CI**
   - *Concept:* CI/CD, fast feedback.
   - *Why:* run lint + tests on every push so regressions are caught before merge.
+
+---
+
+## 🎯 Milestone 8 — From sandbox to FaaS platform (THE north star)
+
+This is where it stops being a tutorial project. Build it in order — each task assumes
+the previous one, and the *measure-before-you-optimize* sequence (8.2 → 8.3) is the
+entire point. Don't merge them.
+
+- [ ] **8.1 — Model a "function" and split deploy from invoke**
+  - *Concept:* what a serverless function actually *is* — code + runtime + config,
+    registered once and invoked many times. The deploy/invoke split is the core FaaS idea.
+  - *Why:* today you upload code and run it in one shot. A FaaS separates the two:
+    `POST /functions` registers a function (returns a `function_id`); `POST /functions/{id}/invoke`
+    runs the already-registered code with a request payload. This separation is what lets
+    you cache, warm, and meter per function.
+  - *Acceptance:* `Function` model (id, name, runtime, code, owner); deploy + invoke
+    endpoints; invoking a registered function returns its output.
+
+- [ ] **8.2 — Naive invoke path + MEASURE the cold start**
+  - *Concept:* baselining. You cannot claim "I made it fast" without a before-number.
+  - *Why:* wire invoke to spin up a fresh container per call (what you do now). Then
+    instrument it: how long from request → container ready → output? Record p50 and p99
+    over ~50 invocations. This ugly number is the thing 8.3 destroys — and the story you'll
+    tell in an interview ("cold start was ~900ms p99; warm pool cut it to ~40ms").
+  - *Acceptance:* invoke works container-per-call; a documented latency benchmark (p50/p99)
+    written into the Notes section below.
+
+- [ ] **8.3 — ⭐ Warm container pool (the centerpiece)**
+  - *Concept:* pooling, cold-start elimination, checkout/return lifecycle, **state reset
+    between tenants**. This is the defining problem of serverless.
+  - *Why:* maintain a pool of pre-warmed, idle containers. An invoke *checks one out*,
+    runs the payload, *resets its state*, and *returns it* to the pool — no `docker run`
+    on the hot path. The subtle, security-critical part: resetting so user B never sees
+    user A's leftover files/memory/env. Get this wrong and it's a data-leak vuln.
+  - *Acceptance:* p99 invoke latency drops dramatically vs 8.2 (record the new number);
+    you can explain pool sizing, eviction, and how you guarantee clean reuse.
+
+- [ ] **8.4 — Concurrency & pool exhaustion under load**
+  - *Concept:* backpressure, queueing vs scaling vs rejecting, min/max pool size.
+  - *Why:* what happens when more invokes arrive than there are warm containers? You must
+    *choose* a policy — queue and wait, spin up more (scale-up), or reject with 429. Each
+    has trade-offs. Load-test it (e.g. `hey`/`locust`) and observe behavior past the pool size.
+  - *Acceptance:* a documented policy; a load test showing what happens at concurrency >
+    pool size; min/max pool bounds with scale-up/down.
+
+- [ ] **8.5 — Horizontal executor fleet + node failure**
+  - *Concept:* distributed scheduling, a node registry, graceful drain, failure handling.
+  - *Why:* one machine's pool has a ceiling. Run *multiple* executor processes/nodes; a
+    scheduler picks one per invoke (least-loaded / round-robin); if a node dies mid-invoke,
+    the platform survives and the request is retried or fails cleanly.
+  - *Acceptance:* 2+ executor nodes; invokes distribute across them; killing one node does
+    not take down the platform.
+
+- [ ] **8.6 — Per-invocation metering**
+  - *Concept:* usage accounting — the thing every FaaS bills on (CPU-ms, memory, count).
+  - *Why:* capture and store per-invocation CPU time, peak memory, and duration. Expose
+    per-function usage. This is real ops/billing infrastructure.
+  - *Acceptance:* `GET /functions/{id}/usage` returns aggregate invocation count + resource
+    totals, sourced from measured values (ties into M4 observability).
+
+- [ ] **8.7 — Live invocation log streaming**
+  - *Concept:* streaming stdout as it's produced (not after exit); reuses M5 WebSocket/pub-sub.
+  - *Why:* `kubectl logs -f` for your platform. The executor publishes log lines to a Redis
+    channel as they're produced; the client streams them live over a WebSocket.
+  - *Acceptance:* invoking a long-running function streams its output line-by-line in real time.
+
+---
+
+## Milestone 9 — Make it reviewable (ship it)
+
+A project a recruiter can't run or understand scores far below one they can. This is the
+half-day of work that disproportionately raises the project's value for your actual goal.
+
+- [ ] **9.1 — README with an architecture diagram + the trade-offs you made**
+  - *Why:* engineers care more about "why Celery over a thread pool" and "why warm pools
+    over container-per-call" than about features. Include the before/after latency numbers
+    from 8.2/8.3 — concrete numbers are what make it credible.
+- [ ] **9.2 — Live deployment + a one-command local setup**
+  - *Why:* a deployed demo (or a flawless `docker compose up`) means a reviewer can *try*
+    it. Untriable projects get skimmed and forgotten.
 
 ---
 
