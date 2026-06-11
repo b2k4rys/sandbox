@@ -29,7 +29,7 @@ web backends. Right now it works but it's rough — clean it up and understand e
     `settings.py` (not raw `os.getenv` scattered in the module), no unused imports
     or clients. App still enqueues and runs a job end-to-end.
 
-- [ ] **1.2 — Move Celery config into `settings.py`**
+- [x] **1.2 — Move Celery config into `settings.py`**
   - *Concept:* 12-factor config — config comes from the environment, not literals.
   - *Why:* `localhost:6379` hardcoded breaks the moment Redis runs in another
     container. You already use `settings.py` for the DB; Celery should follow the

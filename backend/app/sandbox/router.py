@@ -1,6 +1,8 @@
 from celery.result import AsyncResult
 from fastapi import APIRouter, UploadFile, File, Depends
 from starlette.responses import JSONResponse
+
+from app.sandbox.schemas import CeleryTaskResponse
 from app.sandbox.worker import celery
 from app.sandbox.service import execute_code
 from app.auth.service import get_current_user
@@ -17,14 +19,10 @@ async def execute_docker(current_user: Annotated[User, Depends(get_current_user)
     with open(f'sample_{random_id}.py', 'w') as f:
         f.write(f"\n{text}")
     task = execute_code.delay(str(random_id))
-    return task.id
+    return {"task_id": task.id}
 
 @sandbox_router.get('/execute/{task_id}')
 def get_task_res(task_id: str):
     task_result = celery.AsyncResult(task_id)
-    res = {
-        "task_id": task_result.id,
-        "task_status": task_result.status,
-        "task_result": task_result.result if task_result.status == "SUCCESS" else str(task_result.result)
-    }
-    return JSONResponse(res)
+    response_schema = CeleryTaskResponse(task_id=task_result.id, task_status=task_result.status, task_result=task_result.result)
+    return response_schema
