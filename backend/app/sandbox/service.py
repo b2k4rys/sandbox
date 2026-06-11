@@ -1,7 +1,7 @@
 import os
 import subprocess
-from backend.app.sandbox.schemas import CodeResponse
-from backend.app.sandbox.worker import celery
+from app.sandbox.schemas import CodeResponse
+from app.sandbox.worker import celery
 
 @celery.task(name="execute_code")
 def execute_code(random_id):

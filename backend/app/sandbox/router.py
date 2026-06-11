@@ -1,10 +1,10 @@
 from celery.result import AsyncResult
 from fastapi import APIRouter, UploadFile, File, Depends
 from starlette.responses import JSONResponse
-from backend.app.sandbox.worker import celery
-from backend.app.sandbox.service import execute_code
-from backend.app.auth.service import get_current_user
-from backend.app.auth.models import User
+from app.sandbox.worker import celery
+from app.sandbox.service import execute_code
+from app.auth.service import get_current_user
+from app.auth.models import User
 from typing import Annotated
 import uuid
 sandbox_router = APIRouter(prefix='/sandbox')
