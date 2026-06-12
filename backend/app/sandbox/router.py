@@ -1,25 +1,44 @@
+
 from fastapi import APIRouter, UploadFile, File, Depends
+from fastapi.params import Depends
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.sandbox.schemas import CeleryTaskResponse, TaskEnqueueResponse
 from app.sandbox.worker import celery
 from app.sandbox.service import execute_code
 from app.auth.service import get_current_user
 from app.auth.models import User
 from typing import Annotated
+from app.sandbox.models import Job, CeleryStatuses
 import uuid
+from database import get_db
 sandbox_router = APIRouter(prefix='/sandbox')
 
 @sandbox_router.post('/execute', response_model=TaskEnqueueResponse)
-async def execute_docker(current_user: Annotated[User, Depends(get_current_user)],file: UploadFile = File()):
+async def execute_docker(current_user: Annotated[User, Depends(get_current_user)],file: UploadFile = File(), db: AsyncSession = Depends(get_db)):
+
     random_id = uuid.uuid4()
     contents = await file.read()
     text = contents.decode("utf-8")
     with open(f'sample_{random_id}.py', 'w') as f:
         f.write(f"\n{text}")
     task = execute_code.delay(str(random_id))
+    job = Job(user_id=current_user.id, status=CeleryStatuses.STARTED, task_id=task.id)
+    db.add(job)
+    await db.commit()
     return TaskEnqueueResponse(task_id=task.id)
 
 @sandbox_router.get('/execute/{task_id}', response_model=CeleryTaskResponse)
-def get_task_res(task_id: str):
+def get_task_res(task_id: str, db: AsyncSession = Depends(get_db)):
     task_result = celery.AsyncResult(task_id)
+    job = select(Job).where(Job.task_id==task_result.id)
+    print("TASK = ", task_result.result)
+    if task_result:
+        if task_result.result['stdout']:
+            job.stdout, = task_result.result['stdout']
+        if task_result.result['stderr']:
+            job.stderr = task_result.result['stderr']
+    db.commit()
     response_schema = CeleryTaskResponse(task_id=task_result.id, task_status=task_result.status, task_result=task_result.result)
     return response_schema
