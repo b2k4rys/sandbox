@@ -1,10 +1,15 @@
 import os
 import subprocess
+
+from fastapi.params import Depends
+
+from database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.sandbox.schemas import CodeResponse
 from app.sandbox.worker import celery
 
 @celery.task(name="execute_code", track_started=True)
-def execute_code(random_id):
+def execute_code(random_id, db: AsyncSession = Depends(get_db)):
     try:
         process = subprocess.run([
             'docker', 'run', '--name', f'output_{random_id}', '--network', 'none',

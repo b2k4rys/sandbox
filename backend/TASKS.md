@@ -83,7 +83,7 @@ Redis result backend is **ephemeral** — restart Redis and job history is gone.
 systems keep an authoritative record in the relational DB and treat Redis as a cache /
 transport. `app/sandbox/models.py` is empty; that's the gap.
 
-- [ ] **2.1 — Create a `Job` model (`app/sandbox/models.py`)**
+- [x] **2.1 — Create a `Job` model (`app/sandbox/models.py`)**
   - *Concept:* data modeling, source of truth, separating durable state from transport.
   - *Why:* You want to answer "what jobs did user X run, and when?" — Redis can't.
     Columns to think about: `id`, `user_id` (FK to users), `status`, `stdout`,
