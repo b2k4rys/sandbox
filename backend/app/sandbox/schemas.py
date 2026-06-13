@@ -1,7 +1,6 @@
 from pydantic import BaseModel, field_validator
 from pydantic_core.core_schema import ValidationInfo
 
-
 class CodeResponse(BaseModel):
     stdout: str | None = None
     stderr: str | None = None
