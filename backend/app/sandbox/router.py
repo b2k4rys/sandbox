@@ -27,14 +27,16 @@ async def execute_docker(current_user: Annotated[User, Depends(get_current_user)
     return TaskEnqueueResponse(task_id=task.id)
 
 @sandbox_router.get('/execute/{task_id}', response_model=CeleryTaskResponse)
-def get_task_res(task_id: str, db: AsyncSession = Depends(get_db)):
+async def get_task_res(task_id: str, db: AsyncSession = Depends(get_db)):
     task_result = celery.AsyncResult(task_id)
-    job = select(Job).where(Job.task_id==task_result.id)
+    query = select(Job).where(Job.task_id==task_result.id)
+    job = await db.scalar(query)
     if task_result:
         if task_result.result['stdout']:
-            job.stdout, = task_result.result['stdout']
+            print("STDOUT", task_result.result['stdout'])
+            job.stdout = task_result.result['stdout']
         if task_result.result['stderr']:
             job.stderr = task_result.result['stderr']
-    db.commit()
+    await db.commit()
     response_schema = CeleryTaskResponse(task_id=task_result.id, task_status=task_result.status, task_result=task_result.result)
     return response_schema
