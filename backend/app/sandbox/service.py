@@ -1,7 +1,7 @@
 import os
 import subprocess
 from sqlalchemy import select
-
+from datetime import datetime
 from app.auth.models import User
 from app.sandbox.models import Job, CeleryStatuses
 from database import sync_engine
@@ -9,34 +9,38 @@ from app.sandbox.schemas import CodeResponse
 from app.sandbox.worker import celery
 from sqlalchemy.orm import Session
 
-@celery.task(name="execute_code", track_started=True)
-def execute_code(random_id, user_id):
+@celery.task(name="execute_code", track_started=True, bind=True)
+def execute_code(self, random_id):
     stmt = select(Job).where(Job.uuid == random_id)
-    try:
-        with Session(sync_engine) as session:
-            job = Job(user_id=int(user_id), status=CeleryStatuses.STARTED, uuid=str(random_id))
-            session.add(job)
-            session.commit()
-            job = session.scalar(stmt)
+    with Session(sync_engine) as db_session:
+        try:
+            job = db_session.scalar(stmt)
+            job.status = CeleryStatuses.STARTED
+            job.task_id = self.request.id
+            db_session.commit()
+            subprocess.run([
+                'docker', 'run', '--name', f'output_{random_id}', '--network', 'none',
+                '--memory', '128m', '--cpus', '0.5',
+                '-v', f'{os.getcwd()}/sample_{random_id}.py:/app/sample.py',
+                'test'
+            ], timeout=10)
             job.status = CeleryStatuses.RUNNING
-            session.commit()
+            db_session.commit()
 
-        subprocess.run([
-            'docker', 'run', '--name', f'output_{random_id}', '--network', 'none',
-            '--memory', '128m', '--cpus', '0.5',
-            '-v', f'{os.getcwd()}/sample_{random_id}.py:/app/sample.py',
-            'test'
-        ], timeout=10)
-        logs = subprocess.run(['docker', 'logs', f'output_{random_id}'], capture_output=True, text=True)
-        schema = CodeResponse(stdout=logs.stdout, stderr=logs.stderr)
-        with Session(sync_engine) as session:
-            job = session.scalar(stmt)
+            logs = subprocess.run(['docker', 'logs', f'output_{random_id}'], capture_output=True, text=True)
+            schema = CodeResponse(stdout=logs.stdout, stderr=logs.stderr)
+
             job.stdout = schema.stdout
+            job.stderr = schema.stderr
             job.status = CeleryStatuses.SUCCESS
-            session.commit()
-        return schema.model_dump()
-    except subprocess.TimeoutExpired:
-        return CodeResponse(stderr="time limit exceed").model_dump()
-    finally:
-        subprocess.run(['docker', 'rm', '-f', f'output_{random_id}'])
-        os.remove(f'{os.getcwd()}/sample_{random_id}.py')
+            db_session.commit()
+            return schema.model_dump()
+        except subprocess.TimeoutExpired:
+            job.status = CeleryStatuses.FAILED
+            db_session.commit()
+            return CodeResponse(stderr="time limit exceed").model_dump()
+        finally:
+            subprocess.run(['docker', 'rm', '-f', f'output_{random_id}'])
+            os.remove(f'{os.getcwd()}/sample_{random_id}.py')
+            job.finished_at = datetime.now()
+            db_session.commit()
