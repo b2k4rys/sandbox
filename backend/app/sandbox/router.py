@@ -1,6 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Depends
 from fastapi.params import Depends
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.sandbox.schemas import CeleryTaskResponse, TaskEnqueueResponse
 from app.sandbox.worker import celery
@@ -20,10 +19,8 @@ async def execute_docker(current_user: Annotated[User, Depends(get_current_user)
     text = contents.decode("utf-8")
     with open(f'sample_{random_id}.py', 'w') as f:
         f.write(f"\n{text}")
-    job = Job(user_id=current_user.id, status=CeleryStatuses.STARTED, uuid=str(random_id))
-    db.add(job)
-    await db.commit()
-    task = execute_code.delay(str(random_id))
+
+    task = execute_code.delay(str(random_id), current_user.id)
     return TaskEnqueueResponse(task_id=task.id)
 
 @sandbox_router.get('/execute/{task_id}', response_model=CeleryTaskResponse)

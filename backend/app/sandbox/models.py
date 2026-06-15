@@ -16,8 +16,8 @@ class CeleryStatuses(enum.Enum):
 
 class Job(Base):
     __tablename__ = "jobs"
-    uuid: Mapped[str | None]
-    task_id : Mapped[str] = mapped_column(primary_key=True)
+    uuid: Mapped[str] = mapped_column(primary_key=True)
+    task_id : Mapped[str | None] = mapped_column(nullable=True)
     status :  Mapped[CeleryStatuses] = mapped_column(SAEnum(CeleryStatuses))
     user_id : Mapped[int] = mapped_column(ForeignKey('users.id'))
     stdout :  Mapped[str | None] = mapped_column(nullable=True)
