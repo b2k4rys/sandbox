@@ -1,5 +1,5 @@
 from database import Base
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, Index
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 import enum
@@ -16,6 +16,10 @@ class CeleryStatuses(enum.Enum):
 
 class Job(Base):
     __tablename__ = "jobs"
+    __table_args__ = (
+        Index("ix_jobs_user_id_created_at", "user_id", "created_at"),
+    )
+
     uuid: Mapped[str] = mapped_column(primary_key=True)
     task_id : Mapped[str | None] = mapped_column(nullable=True)
     status :  Mapped[CeleryStatuses] = mapped_column(SAEnum(CeleryStatuses))
