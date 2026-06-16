@@ -92,7 +92,7 @@ transport. `app/sandbox/models.py` is empty; that's the gap.
     only sees models imported there); migration generated and `alembic upgrade head`
     applies cleanly.
 
-- [ ] **2.2 — Persist job state from the worker**
+- [x] **2.2 — Persist job state from the worker**
   - *Concept:* write-through from worker to DB; who owns the DB session in a worker
     (workers aren't request-scoped — `get_db` won't work there).
   - *Why:* This is the subtle part — your FastAPI `get_db` dependency is tied to the
@@ -102,7 +102,7 @@ transport. `app/sandbox/models.py` is empty; that's the gap.
   - *Acceptance:* on enqueue, a `Job` row is created with status `queued`; the worker
     updates it to `running` then `success`/`failed` with captured output.
 
-- [ ] **2.3 — Add an index where it matters**
+- [x] **2.3 — Add an index where it matters**
   - *Concept:* indexing, query patterns drive schema.
   - *Why:* "list my jobs" filters by `user_id` and sorts by `created_at`. Without an
     index that's a full table scan. Learn to index for the read you actually do.
