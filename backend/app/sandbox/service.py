@@ -19,8 +19,8 @@ def execute_code(self, random_id):
             job.task_id = self.request.id
             db_session.commit()
             subprocess.run([
-                'docker', 'run', '--name', f'output_{random_id}', '--network', 'none',
-                '--memory', '128m', '--cpus', '0.5',
+                'docker', 'run', '--read-only', '--cap-drop', 'ALL', '--name', f'output_{random_id}', '--network', 'none',
+                '--memory', '128m', '--cpus', '0.5', '--pids-limit', '50', '--security-opt no-new-privileges',
                 '-v', f'{os.getcwd()}/sample_{random_id}.py:/app/sample.py',
                 'test'
             ], timeout=10)
