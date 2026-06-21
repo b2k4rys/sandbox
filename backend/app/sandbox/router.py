@@ -19,7 +19,7 @@ async def execute_docker(current_user: Annotated[User, Depends(get_current_user)
     text = contents.decode("utf-8")
     with open(f'sample_{random_id}.py', 'w') as f:
         f.write(f"\n{text}")
-    job = Job(user_id=int(current_user.id), status=CeleryStatuses.PENDING, uuid=str(random_id))
+    job = Job(status=CeleryStatuses.PENDING, uuid=str(random_id), user_id=int(current_user.id))
     db.add(job)
     await db.commit()
     task = execute_code.delay(str(random_id))
