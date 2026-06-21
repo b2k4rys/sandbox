@@ -24,6 +24,5 @@ async def execute_docker(code: Annotated[str, Body(embed=True)], current_user: A
 @sandbox_router.get('/execute/{task_id}', response_model=CeleryTaskResponse)
 async def get_task_res(task_id: str, db: AsyncSession = Depends(get_db)):
     task_result = celery.AsyncResult(task_id)
-    print("TASK RESULT", task_result)
     response_schema = CeleryTaskResponse(task_id=task_result.id, task_status=task_result.status, task_result=task_result.result)
     return response_schema
