@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session
 from app.models import *
 
 @celery.task(name="execute_code", track_started=True, bind=True)
-def execute_code(self, random_id):
+def execute_code(self, random_id, code):
+    with open(f'sample_{random_id}.py', 'w') as f:
+        f.write(f"\n{code}")
     stmt = select(Job).where(Job.uuid == random_id)
 
     with Session(sync_engine) as db_session:
