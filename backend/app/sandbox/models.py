@@ -23,7 +23,7 @@ class Job(Base):
     uuid: Mapped[str] = mapped_column(primary_key=True)
     task_id : Mapped[str | None] = mapped_column(nullable=True)
     status :  Mapped[CeleryStatuses] = mapped_column(SAEnum(CeleryStatuses))
-    user_id : Mapped[int] = mapped_column(ForeignKey('users.id'))
+    user_id : Mapped[int | None] = mapped_column(ForeignKey('users.id'), nullable=True)
     stdout :  Mapped[str | None] = mapped_column(nullable=True)
     stderr :  Mapped[str | None] = mapped_column(nullable=True)
     created_at : Mapped[datetime] = mapped_column(server_default=func.now())

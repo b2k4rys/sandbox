@@ -12,7 +12,7 @@ from fastapi.security import OAuth2PasswordBearer
 
 password_hash = PasswordHash.recommended()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
 def hash_password(password: str) -> str:
     return password_hash.hash(password)
 
@@ -29,6 +29,22 @@ def decode_jwt(token: str):
 
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: AsyncSession = Depends(get_db)):
+    try:
+        decoded_jwt = decode_jwt(token)
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    user_id = int(decoded_jwt['sub'])
+    if user_id:
+        result = await db.execute(select(User).filter_by(id=user_id))
+        user = result.scalars().first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        return user
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST)
+
+async def get_current_user_optional(token: Annotated[str, Depends(oauth2_scheme_optional)], db: AsyncSession = Depends(get_db)):
+    if not token:
+        return None
     try:
         decoded_jwt = decode_jwt(token)
     except JWTError:
