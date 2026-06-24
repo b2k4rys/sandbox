@@ -1,6 +1,10 @@
+import asyncio
+
 from fastapi import APIRouter, UploadFile, File, Depends, Request, HTTPException
 from fastapi.params import Depends, Body
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.websockets import WebSocketDisconnect
+
 from app.sandbox.schemas import CeleryTaskResponse, TaskEnqueueResponse
 from app.sandbox.worker import celery
 from app.sandbox.service import execute_code
@@ -56,9 +60,16 @@ from fastapi import WebSocket
 # @sandbox_router.post('/execute')
 async def execute_docker(
         websocket: WebSocket,
-        db: AsyncSession = Depends(get_db)
+        db: AsyncSession = Depends(get_db),
 ):
     await websocket.accept()
+    client_id = websocket.client.host
+    curr = await r.incr(str(client_id))
+    if curr == 1:
+        await r.expire(client_id, 60)
+    if curr > int(RATE_LIMIT):
+        raise HTTPException(429)
+
     data = await websocket.receive_text()
     await websocket.send_text(f"message text was {data} nigga")
     random_id = uuid.uuid4()
@@ -67,13 +78,23 @@ async def execute_docker(
     await db.commit()
     task = execute_code.delay(str(random_id), data)
     res = celery.AsyncResult(task.id)
-    while True:
-        if res.status == 'SUCCESS':
-            await websocket.send_text(f"your status is {res.status} nigga")
-            await websocket.send_text(f"res nigga {res.result}")
-            return
-    return TaskEnqueueResponse(task_id=task.id)
+    try:
+        while True:
 
+            res = celery.AsyncResult(task.id)
+            await websocket.send_text(f"status: {res.status}")
+
+            if res.status in ('SUCCESS', 'FAILURE'):
+                await websocket.send_text(f"result: {res.result}")
+                # no break — just keep going
+
+            await asyncio.sleep(0.5)
+        return TaskEnqueueResponse(task_id=task.id)
+    except WebSocketDisconnect:
+        print("Client disconnected cleanly")
+    except Exception as e:
+        print(f"Something went wrong: {e}")
+        await websocket.close(code=1011)
 
 
 
