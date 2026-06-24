@@ -9,18 +9,20 @@ from app.auth.models import User
 from typing import Annotated
 from app.sandbox.models import Job, CeleryStatuses
 import uuid
-from app.sandbox.rate_limiter import RateLimiter
 from database import get_db
 import redis
 import redis.asyncio as aioredis
 
-from settings import RATE_LIMIT
+from settings import RATE_LIMIT, CELERY_RESULT_BACKEND
 
-r = aioredis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+r = aioredis.from_url(CELERY_RESULT_BACKEND)
 sandbox_router = APIRouter(prefix='/sandbox')
 
-# @sandbox_router.post('/execute', response_model=TaskEnqueueResponse)
-@sandbox_router.post('/execute')
+
+# TODO: X-Forwarded-For when behind a proxy
+# TODO: token-bucket if boundary burst matters
+@sandbox_router.post('/execute', response_model=TaskEnqueueResponse)
+# @sandbox_router.post('/execute')
 async def execute_docker(
         request: Request,
         code: Annotated[str, Body(embed=True)],
@@ -30,7 +32,6 @@ async def execute_docker(
     random_id = uuid.uuid4()
     client_id = request.client.host
     curr = await r.incr(str(client_id))
-
     if curr == 1:
         await r.expire(client_id, 60)
     if curr > int(RATE_LIMIT):
@@ -47,3 +48,33 @@ async def get_task_res(task_id: str, db: AsyncSession = Depends(get_db)):
     task_result = celery.AsyncResult(task_id)
     response_schema = CeleryTaskResponse(task_id=task_result.id, task_status=task_result.status, task_result=task_result.result)
     return response_schema
+
+
+from fastapi import WebSocket
+
+@sandbox_router.websocket("/ws")
+# @sandbox_router.post('/execute')
+async def execute_docker(
+        websocket: WebSocket,
+        db: AsyncSession = Depends(get_db)
+):
+    await websocket.accept()
+    data = await websocket.receive_text()
+    await websocket.send_text(f"message text was {data} nigga")
+    random_id = uuid.uuid4()
+    job = Job(status=CeleryStatuses.PENDING, uuid=str(random_id), user_id=None)
+    db.add(job)
+    await db.commit()
+    task = execute_code.delay(str(random_id), data)
+    res = celery.AsyncResult(task.id)
+    while True:
+        if res.status == 'SUCCESS':
+            await websocket.send_text(f"your status is {res.status} nigga")
+            await websocket.send_text(f"res nigga {res.result}")
+            return
+    return TaskEnqueueResponse(task_id=task.id)
+
+
+
+
+

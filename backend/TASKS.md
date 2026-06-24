@@ -117,7 +117,7 @@ You already do well here: `--network none`, `--memory 128m`, `--cpus 0.5`, a 10s
 timeout, and `docker rm -f` cleanup. That's better than most tutorials. Now push it
 to the bar a Big-Tech reviewer would expect.
 
-- [ ] **3.1 — Drop privileges & lock down the container**
+- [x] **3.1 — Drop privileges & lock down the container**
   - *Concept:* defense in depth, least privilege, container escape surface.
   - *Why:* code runs as root inside the container by default; a kernel/Docker bug
     becomes a host compromise. Add `--read-only`, `--pids-limit`, `--user`, drop all
@@ -125,14 +125,14 @@ to the bar a Big-Tech reviewer would expect.
   - *Acceptance:* a malicious sample (fork bomb, fill disk, read host files) is contained;
     you can describe what each flag blocks.
 
-- [ ] **3.2 — Replace the file-on-disk handoff**
+- [x] **3.2 — Replace the file-on-disk handoff**
   - *Concept:* coupling between processes, race conditions, shared mutable state.
   - *Why:* the router writes `sample_{uuid}.py` to the web container's CWD and the worker
     reads it — they must share a filesystem, which they often won't in prod. Pass the code
     *through the queue* (it's just a string) or via an object store. Removes a whole failure mode.
   - *Acceptance:* no `open(...).write` in the router; worker receives code as data.
 
-- [ ] **3.3 — Rate-limit `/execute`**
+- [x] **3.3 — Rate-limit `/execute`**
   - *Concept:* rate limiting, abuse/DoS protection, token-bucket idea.
   - *Why:* one user can spawn unlimited Docker containers and exhaust the host. Even a
     crude per-user limit (Redis counter with TTL) teaches the mechanism that sits in
