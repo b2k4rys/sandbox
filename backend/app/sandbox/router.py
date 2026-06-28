@@ -1,23 +1,19 @@
 import asyncio
-
 from fastapi import APIRouter, UploadFile, File, Depends, Request, HTTPException
 from fastapi.params import Depends, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.websockets import WebSocketDisconnect
-
 from app.sandbox.schemas import CeleryTaskResponse, TaskEnqueueResponse
 from app.sandbox.worker import celery
-from app.sandbox.service import execute_code, par_dir
+from app.sandbox.service import execute_code
 from app.auth.service import get_current_user, get_current_user_optional
 from app.auth.models import User
 from typing import Annotated
 from app.sandbox.models import Job, CeleryStatuses
 import uuid
 from database import get_db
-import redis
 import redis.asyncio as aioredis
-
-from settings import RATE_LIMIT, CELERY_RESULT_BACKEND,  PAR_DIR
+from settings import RATE_LIMIT, CELERY_RESULT_BACKEND
 
 r = aioredis.from_url(CELERY_RESULT_BACKEND)
 sandbox_router = APIRouter(prefix='/sandbox')
@@ -57,17 +53,19 @@ async def get_task_res(task_id: str, db: AsyncSession = Depends(get_db)):
 
 from fastapi import WebSocket
 
-@sandbox_router.websocket("/ws")
+@sandbox_router.websocket("/ws/session")
 # @sandbox_router.post('/execute')
-async def execute_docker(
+async def websocket_session(
         websocket: WebSocket,
         db: AsyncSession = Depends(get_db),
 ):
     await websocket.accept()
     client_id = websocket.client.host
     curr = await r.incr(str(client_id))
+
     if curr == 1:
         await r.expire(client_id, 60)
+
     if curr > int(RATE_LIMIT):
         raise HTTPException(429)
 
@@ -79,16 +77,18 @@ async def execute_docker(
     await db.commit()
     task = execute_code.delay(str(random_id), data)
     res = celery.AsyncResult(task.id)
+
     try:
         while True:
+            await websocket.send_text(f"curr is {curr}")
             res = celery.AsyncResult(task.id)
             await websocket.send_text(f"status: {res.status}")
-
             if res.status in ('SUCCESS', 'FAILURE'):
-                await websocket.send_text(f"result: {res.result}")
+                response =  CeleryTaskResponse(task_id=task.id, task_status=res.status, task_result=res.result)
+                await websocket.send_json(response.model_dump())
+                await websocket.close(code=1000)
+                return
 
-            await asyncio.sleep(0.5)
-        return TaskEnqueueResponse(task_id=task.id)
     except WebSocketDisconnect:
         print("Client disconnected cleanly")
     except Exception as e:
