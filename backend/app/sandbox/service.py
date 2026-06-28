@@ -9,18 +9,20 @@ from sqlalchemy.orm import Session
 from app.sandbox.models import Job, CeleryStatuses
 # import needed for worker
 import app.models
+from settings import SANDBOX_DIR
 
 @celery.task(name="execute_code", track_started=True, bind=True)
 def execute_code(self, random_id, code):
-    with open(f'sample_{random_id}.py', 'w') as f:
+    with open(f'{SANDBOX_DIR}/sample_{random_id}.py', 'w') as f:
         f.write(f"{code}")
+
     stmt = select(Job).where(Job.uuid == random_id)
 
     with Session(sync_engine) as db_session:
         try:
             job = db_session.scalar(stmt)
             if not job:
-                os.remove(f'{os.getcwd()}/sample_{random_id}.py')
+                os.remove(f'{SANDBOX_DIR}/sample_{random_id}.py')
                 return CodeResponse(stderr="job does not exist").model_dump()
             job.status = CeleryStatuses.STARTED
             job.task_id = self.request.id
@@ -28,7 +30,7 @@ def execute_code(self, random_id, code):
             subprocess.run([
                 'docker', 'run', '--read-only', '--cap-drop', 'ALL', '--name', f'output_{random_id}', '--network', 'none',
                 '--memory', '128m', '--cpus', '0.5', '--pids-limit', '50', '--security-opt', 'no-new-privileges',
-                '-v', f'{os.getcwd()}/sample_{random_id}.py:/app/sample.py',
+                '-v', f'{SANDBOX_DIR}/sample_{random_id}.py:/app/sample.py',
                 'test'
             ], timeout=10)
             job.status = CeleryStatuses.RUNNING
@@ -49,7 +51,6 @@ def execute_code(self, random_id, code):
         finally:
             if job is not None:
                 subprocess.run(['docker', 'rm', '-f', f'output_{random_id}'])
-                os.remove(f'{os.getcwd()}/sample_{random_id}.py')
+                os.remove(f'{SANDBOX_DIR}/sample_{random_id}.py')
                 job.finished_at = datetime.now()
-                print(job)
                 db_session.commit()

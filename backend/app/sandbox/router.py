@@ -7,7 +7,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from app.sandbox.schemas import CeleryTaskResponse, TaskEnqueueResponse
 from app.sandbox.worker import celery
-from app.sandbox.service import execute_code
+from app.sandbox.service import execute_code, par_dir
 from app.auth.service import get_current_user, get_current_user_optional
 from app.auth.models import User
 from typing import Annotated
@@ -17,7 +17,7 @@ from database import get_db
 import redis
 import redis.asyncio as aioredis
 
-from settings import RATE_LIMIT, CELERY_RESULT_BACKEND
+from settings import RATE_LIMIT, CELERY_RESULT_BACKEND,  PAR_DIR
 
 r = aioredis.from_url(CELERY_RESULT_BACKEND)
 sandbox_router = APIRouter(prefix='/sandbox')
@@ -48,6 +48,7 @@ async def execute_docker(
     return TaskEnqueueResponse(task_id=task.id)
 
 @sandbox_router.get('/execute/{task_id}', response_model=CeleryTaskResponse)
+# @sandbox_router.get('/execute/{task_id}')
 async def get_task_res(task_id: str, db: AsyncSession = Depends(get_db)):
     task_result = celery.AsyncResult(task_id)
     response_schema = CeleryTaskResponse(task_id=task_result.id, task_status=task_result.status, task_result=task_result.result)
@@ -80,13 +81,11 @@ async def execute_docker(
     res = celery.AsyncResult(task.id)
     try:
         while True:
-
             res = celery.AsyncResult(task.id)
             await websocket.send_text(f"status: {res.status}")
 
             if res.status in ('SUCCESS', 'FAILURE'):
                 await websocket.send_text(f"result: {res.result}")
-                # no break — just keep going
 
             await asyncio.sleep(0.5)
         return TaskEnqueueResponse(task_id=task.id)
@@ -95,7 +94,4 @@ async def execute_docker(
     except Exception as e:
         print(f"Something went wrong: {e}")
         await websocket.close(code=1011)
-
-
-
 
