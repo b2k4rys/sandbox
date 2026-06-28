@@ -1,5 +1,5 @@
 import asyncio
-from fastapi import APIRouter, UploadFile, File, Depends, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, WebSocket
 from fastapi.params import Depends, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.websockets import WebSocketDisconnect
@@ -13,6 +13,7 @@ from app.sandbox.models import Job, CeleryStatuses
 import uuid
 from database import get_db
 import redis.asyncio as aioredis
+
 from settings import RATE_LIMIT, CELERY_RESULT_BACKEND
 
 r = aioredis.from_url(CELERY_RESULT_BACKEND)
@@ -51,15 +52,12 @@ async def get_task_res(task_id: str, db: AsyncSession = Depends(get_db)):
     return response_schema
 
 
-from fastapi import WebSocket
-
 @sandbox_router.websocket("/ws/session")
 # @sandbox_router.post('/execute')
 async def websocket_session(
         websocket: WebSocket,
         db: AsyncSession = Depends(get_db),
 ):
-    await websocket.accept()
     client_id = websocket.client.host
     curr = await r.incr(str(client_id))
 
@@ -67,10 +65,12 @@ async def websocket_session(
         await r.expire(client_id, 60)
 
     if curr > int(RATE_LIMIT):
-        raise HTTPException(429)
+        await websocket.close(code=1008)
+        return
 
+    await websocket.accept()
     data = await websocket.receive_text()
-    await websocket.send_text(f"message text was {data} nigga")
+    await websocket.send_text(f"message text was {data}")
     random_id = uuid.uuid4()
     job = Job(status=CeleryStatuses.PENDING, uuid=str(random_id), user_id=None)
     db.add(job)
