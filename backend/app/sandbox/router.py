@@ -6,7 +6,7 @@ from starlette.websockets import WebSocketDisconnect
 from app.sandbox.schemas import CeleryTaskResponse, TaskEnqueueResponse
 from app.sandbox.worker import celery
 from app.sandbox.service import execute_code
-from app.auth.service import get_current_user, get_current_user_optional
+from app.auth.service import get_current_user_optional
 from app.auth.models import User
 from typing import Annotated
 from app.sandbox.models import Job, CeleryStatuses
@@ -81,13 +81,14 @@ async def websocket_session(
     try:
         while True:
             await websocket.send_text(f"curr is {curr}")
-            res = celery.AsyncResult(task.id)
-            await websocket.send_text(f"status: {res.status}")
-            if res.status in ('SUCCESS', 'FAILURE'):
-                response =  CeleryTaskResponse(task_id=task.id, task_status=res.status, task_result=res.result)
+            status = await asyncio.to_thread(lambda: res.status)
+            if  status in ('SUCCESS', 'FAILURE'):
+                result = await asyncio.to_thread(lambda: res.result)
+                response =  CeleryTaskResponse(task_id=task.id, task_status=status, task_result=result)
                 await websocket.send_json(response.model_dump())
                 await websocket.close(code=1000)
                 return
+            await asyncio.sleep(1)
 
     except WebSocketDisconnect:
         print("Client disconnected cleanly")
