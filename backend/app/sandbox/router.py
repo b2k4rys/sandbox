@@ -69,7 +69,12 @@ async def websocket_session(
         return
 
     await websocket.accept()
-    data = await websocket.receive_text()
+    # data = await websocket.receive_text()
+    try:
+        data = await asyncio.wait_for(websocket.receive_text(), 5)
+    except asyncio.TimeoutError:
+        await websocket.close(code=1000, reason='time limit exceeded')
+        return
     await websocket.send_text(f"message text was {data}")
     random_id = uuid.uuid4()
     job = Job(status=CeleryStatuses.PENDING, uuid=str(random_id), user_id=None)
