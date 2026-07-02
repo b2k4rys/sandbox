@@ -11,7 +11,7 @@ from app.auth.models import User
 from typing import Annotated
 from app.sandbox.models import Job, CeleryStatuses
 import uuid
-from database import get_db
+from database import get_db, engine
 import redis.asyncio as aioredis
 
 from settings import RATE_LIMIT, CELERY_RESULT_BACKEND
@@ -55,8 +55,7 @@ async def get_task_res(task_id: str, db: AsyncSession = Depends(get_db)):
 @sandbox_router.websocket("/ws/session")
 # @sandbox_router.post('/execute')
 async def websocket_session(
-        websocket: WebSocket,
-        db: AsyncSession = Depends(get_db),
+        websocket: WebSocket
 ):
     client_id = websocket.client.host
     curr = await r.incr(str(client_id))
@@ -73,13 +72,14 @@ async def websocket_session(
     try:
         data = await asyncio.wait_for(websocket.receive_text(), 5)
     except asyncio.TimeoutError:
-        await websocket.close(code=1000, reason='time limit exceeded')
+        await websocket.close(code=1008, reason='time limit exceeded')
         return
     await websocket.send_text(f"message text was {data}")
     random_id = uuid.uuid4()
     job = Job(status=CeleryStatuses.PENDING, uuid=str(random_id), user_id=None)
-    db.add(job)
-    await db.commit()
+    async with AsyncSession(engine) as db:
+        db.add(job)
+        await db.commit()
     task = execute_code.delay(str(random_id), data)
     res = celery.AsyncResult(task.id)
 
