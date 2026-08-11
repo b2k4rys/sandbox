@@ -68,18 +68,21 @@ async def websocket_session(
         return
 
     await websocket.accept()
-    # data = await websocket.receive_text()
+
     try:
         data = await asyncio.wait_for(websocket.receive_text(), 5)
     except asyncio.TimeoutError:
         await websocket.close(code=1008, reason='time limit exceeded')
         return
     await websocket.send_text(f"message text was {data}")
+
     random_id = uuid.uuid4()
     job = Job(status=CeleryStatuses.PENDING, uuid=str(random_id), user_id=None)
+
     async with AsyncSession(engine) as db:
         db.add(job)
         await db.commit()
+
     task = execute_code.delay(str(random_id), data)
     res = celery.AsyncResult(task.id)
 
@@ -94,7 +97,6 @@ async def websocket_session(
                 await websocket.close(code=1000)
                 return
             await asyncio.sleep(1)
-
     except WebSocketDisconnect:
         print("Client disconnected cleanly")
     except Exception as e:
