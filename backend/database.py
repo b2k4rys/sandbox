@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 Base = declarative_base()
 engine = create_async_engine(settings.DATABASE_URL)
 sync_engine = create_engine(settings.SYNC_DATABASE_URL)
-AsyncSessionLocal = sessionmaker(bind=engine, class_=AsyncSession)
+AsyncSessionLocal = sessionmaker(bind=engine, class_= AsyncSession)
 
 async def get_db():
     async with AsyncSessionLocal() as session:

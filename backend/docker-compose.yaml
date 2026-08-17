@@ -4,20 +4,21 @@ services:
     container_name: redis_container
     ports:
       - "6380:6379"
+    command: redis-server --save 20 1 --loglevel warning
 
   web:
     container_name: fastapi_container
     build:
       context: .
       dockerfile: docker/Dockerfile
+    command: sh -c "alembic upgrade head && fastapi run main.py --port 8080"
     ports:
       - "8080:8080"
     environment:
-      - CELERY_BROKER_URL=redis://localhost:6379
+      - CELERY_BROKER_URL=redis://db:6379
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    depends_on:
-      - redis
-
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db/sandbox
+      - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:postgres@db/sandbox
 
   celery:
     build:
@@ -25,6 +26,9 @@ services:
       dockerfile: docker/Dockerfile
     container_name: celery_container
     command: celery -A app.sandbox.worker worker --loglevel=info
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       - redis
 
