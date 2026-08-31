@@ -6,7 +6,10 @@ COPY requirements.txt .
 
 RUN apk add --no-cache build-base
 
+RUN apk update && apk add docker
+
 RUN pip install -r requirements.txt
+
 
 COPY .. .
 

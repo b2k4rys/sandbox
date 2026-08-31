@@ -15,10 +15,12 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - CELERY_BROKER_URL=redis://db:6379
+      - CELERY_BROKER_URL=redis://redis:6379
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db/sandbox
       - SYNC_DATABASE_URL=postgresql+psycopg2://postgres:postgres@db/sandbox
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
 
   celery:
     build:
@@ -31,7 +33,8 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       - redis
-
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
   db:
     image: postgres:17-alpine
     container_name: postgres_container
@@ -42,7 +45,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "5432:5432"
 
 
 
