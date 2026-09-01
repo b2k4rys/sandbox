@@ -48,14 +48,15 @@ def execute_code(self, random_id, code):
                 logger.info('INSIDE OPEN FILE')
                 f.write(f"{code}")
 
-            subprocess.run(['docker', 'cp', f'celery_container:{SANDBOX_DIR}/sample_{random_id}.py',
-                            f'./{SANDBOX_DIR}/sample_{random_id}.py'])
+            subprocess.run(
+                ['docker', 'create', '--name', f'output_{random_id}', 'python:3.12-slim', 'python', '/main.py'])
 
-            subprocess.run(['docker', 'create', '--name', f'output_{random_id}', 'python:3.12-slim'])
+            subprocess.run(['docker', 'cp', f'{SANDBOX_DIR}/sample_{random_id}.py',
+                            f'output_{random_id}:/main.py'])
 
-            subprocess.run(['docker', 'cp', f'./{SANDBOX_DIR}/sample_{random_id}.py',
-                            f'output_{random_id}:/{SANDBOX_DIR}/sample_{random_id}.py'])
 
+            logger.info('CONTENTS OF OUTPUT CONTAINER')
+            subprocess.run(['docker', 'ps', '-a'])
             subprocess.run([
                 'docker', 'start', f'output_{random_id}',
             ])
